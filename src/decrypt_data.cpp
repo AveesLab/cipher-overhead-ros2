@@ -162,13 +162,15 @@ void Decryption::DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg
 {
 
 //    // 프레임 타이밍 계산
-//    auto current_time = this->get_clock()->now();
-//    if (last_frame_time_.nanoseconds() != 0) {
-//        auto frame_duration = current_time - last_frame_time_;
-//        double fps = 1.0 / frame_duration.seconds();
-//        std::cout << "FPS: " << fps << std::endl;
-//    }
-//    last_frame_time_ = current_time;
+    auto current_time = this->get_clock()->now();
+    if (last_frame_time_.nanoseconds() != 0) {
+        auto frame_duration = current_time - last_frame_time_;
+        double fps = 1.0 / frame_duration.seconds();
+        std::cout << "FPS: " << fps << std::endl;
+
+	ui_->fpsLabel->setText(QString("FPS: %1").arg(fps, 0, 'f', 2));
+    }
+    last_frame_time_ = current_time;
 
     // 암호화된 데이터를 문자열로 변환
     std::string encrypted_msg(reinterpret_cast<const char*>(msg->data.data()), msg->data.size());
@@ -192,24 +194,12 @@ void Decryption::DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg
     }
 
     cv::Mat& image = cv_ptr->image;
-//    cv::Mat mask = cv::Mat::zeros(image.size(), image.type());
-//    int radius = std::min(image.cols, image.rows) / 2;
-//    cv::Point center(image.cols / 2, image.rows / 2);
-//    cv::circle(mask, center, radius, cv::Scalar(255,255,255), -1);
-//
-//    cv::Mat circular_image;
-//    image.copyTo(circular_image, mask);
-
-//    QImage qimage(circular_image.data, circular_image.cols, circular_image.rows, circular_image.step, QImage::Format_RGB888);
     QImage qimage(image.data, image.cols, image.rows, image.step, QImage::Format_RGB888);
     QImage rgb_image = qimage.rgbSwapped();
 
     ui_->cameraLabel->setPixmap(QPixmap::fromImage(rgb_image));
-//    label_->setPixmap(QPixmap::fromImage(rgbImage));
 
 
-//    cv::imshow("Camera Image", cv_ptr->image);
-//    cv::waitKey(1);
 }
 
 } /* namespace */

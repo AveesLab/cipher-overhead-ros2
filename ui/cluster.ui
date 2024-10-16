@@ -35,6 +35,19 @@
      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;cameraLabel&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
     </property>
    </widget>
+   <widget class="QLabel" name="fpsLabel">
+    <property name="geometry">
+     <rect>
+      <x>980</x>
+      <y>260</y>
+      <width>161</width>
+      <height>81</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>fpsLabel</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -46,7 +59,6 @@
     </rect>
    </property>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
  </widget>
  <resources/>
  <connections/>

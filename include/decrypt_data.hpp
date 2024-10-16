@@ -92,6 +92,7 @@ public:
   void DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg);
   char id[7] = "key_id";
   
+  rclcpp::Time last_frame_time_;
   Ui::MainWindow* ui_;
 //  QLabel* cameraLabel_;
 
