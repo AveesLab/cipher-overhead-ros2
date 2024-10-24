@@ -1,4 +1,4 @@
 /**:
   ros__parameters:
-    key_size : 16 
-    qos_tcp : false 
+    key_size : 32 
+    qos_tcp : true 

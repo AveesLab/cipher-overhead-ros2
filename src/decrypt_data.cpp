@@ -11,18 +11,21 @@ Decryption::Decryption(Ui::MainWindow* ui)
                               .allow_undeclared_parameters(true)
                               .automatically_declare_parameters_from_overrides(true)), ui_(ui) 
 {
-  this->get_parameter_or("key_size", keylength, 16);
-  this->get_parameter_or("qos_tcp", tcp, false);
+  this->get_parameter_or("key_size", keylength, 32);
+  this->get_parameter_or("qos_tcp", tcp, true);
   key = CryptoPP::SecByteBlock(0x00, keylength);
   iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
+
   initialize_tee(&ctx);
 
   // Initialize AES context and set up encryption parameters
-  initialize_aes();
+  std::fill(key.begin(), key.end(), 'A');
+  std::fill(iv.begin(), iv.end(), 'A');
 
   save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
   rclcpp::QoS default_qos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
-  default_qos.best_effort();
+//  default_qos.best_effort();
+  default_qos.reliable();
   rclcpp::QoS qos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
   if(tcp){
     qos.reliable();
@@ -39,6 +42,15 @@ Decryption::Decryption(Ui::MainWindow* ui)
   /* Ros Topic Publisher */
   /***********************/
   DecryptedImagePublisher_ = this->create_publisher<sensor_msgs::msg::Image>("decrypted_image", default_qos);
+
+
+  fps_file_.open("/home/avees/ros2_ws/file/fps_data.csv");
+  if(!fps_file_.is_open()) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to open the file!");
+  }
+  else {
+    fps_file_ << "FPS" << std::endl;
+  }
 }
 
 void Decryption::initialize_tee(Decryption::test_ctx *ctx)
@@ -64,8 +76,7 @@ void Decryption::initialize_aes()
 //    CryptoPP::AutoSeededRandomPool prng;
 //    prng.GenerateBlock(key, key.size());
 //    prng.GenerateBlock(iv, iv.size());
-    std::fill(key.begin(), key.end(), 'A');
-    std::fill(iv.begin(), iv.end(), 'A');
+//    std::fill(key.begin(), key.end(), 'A');
 
 //    CryptoPP::SecByteBlock key = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::DEFAULT_KEYLENGTH);
 //    CryptoPP::SecByteBlock iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
@@ -160,6 +171,10 @@ std::string Decryption::decrypt(const std::string& ciphertext)
 
 void Decryption::DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg)
 {
+    if(!fps_file_.is_open()){
+      std::cerr << "Failed to open the file!" << std::endl;
+      return;
+    }
 
 //    // 프레임 타이밍 계산
     auto current_time = this->get_clock()->now();
@@ -169,8 +184,18 @@ void Decryption::DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg
         std::cout << "FPS: " << fps << std::endl;
 
 	ui_->fpsLabel->setText(QString("FPS: %1").arg(fps, 0, 'f', 2));
+    	
+	fps_file_ << fps << std::endl;
+	if (++fps_counter_ >= 2000) {
+	  fps_file_.close();
+	  std::cout << "2000 FPS values recorded. Exiting." << std::endl;
+	  rclcpp::shutdown();
+	  return;
+	}
     }
+
     last_frame_time_ = current_time;
+
 
     // 암호화된 데이터를 문자열로 변환
     std::string encrypted_msg(reinterpret_cast<const char*>(msg->data.data()), msg->data.size());
@@ -198,7 +223,6 @@ void Decryption::DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg
     QImage rgb_image = qimage.rgbSwapped();
 
     ui_->cameraLabel->setPixmap(QPixmap::fromImage(rgb_image));
-
 
 }
 

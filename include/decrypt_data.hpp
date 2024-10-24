@@ -93,6 +93,8 @@ public:
   char id[7] = "key_id";
   
   rclcpp::Time last_frame_time_;
+  std::ofstream fps_file_;
+  int fps_counter_ = 0;
   Ui::MainWindow* ui_;
 //  QLabel* cameraLabel_;
 
