@@ -11,18 +11,18 @@ Decryption::Decryption(Ui::MainWindow* ui)
                               .allow_undeclared_parameters(true)
                               .automatically_declare_parameters_from_overrides(true)), ui_(ui) 
 {
-  this->get_parameter_or("key_size", keylength, 32);
   this->get_parameter_or("qos_tcp", tcp, true);
-  key = CryptoPP::SecByteBlock(0x00, keylength);
-  iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
-
-  initialize_tee(&ctx);
-
-  // Initialize AES context and set up encryption parameters
-  std::fill(key.begin(), key.end(), 'A');
-  std::fill(iv.begin(), iv.end(), 'A');
-
-  save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
+//  this->get_parameter_or("key_size", keylength, 32);
+//  key = CryptoPP::SecByteBlock(0x00, keylength);
+//  iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
+//
+//  initialize_tee(&ctx);
+//
+//  // Initialize AES context and set up encryption parameters
+//  std::fill(key.begin(), key.end(), 'A');
+//  std::fill(iv.begin(), iv.end(), 'A');
+//
+//  save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
   rclcpp::QoS default_qos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
 //  default_qos.best_effort();
   default_qos.reliable();
@@ -35,13 +35,14 @@ Decryption::Decryption(Ui::MainWindow* ui)
   /************************/
   /* Ros Topic Subscriber */
   /************************/
-  ImageSubscriber_ = this->create_subscription<sensor_msgs::msg::Image>("encrypted_image", qos, std::bind(&Decryption::DecryptionCallback, this, std::placeholders::_1));
+ // ImageSubscriber_ = this->create_subscription<sensor_msgs::msg::Image>("encrypted_image", default_qos, std::bind(&Decryption::DecryptionCallback, this, std::placeholders::_1));
+  ImageSubscriber_ = this->create_subscription<sensor_msgs::msg::Image>("/camera1/image_raw", default_qos, std::bind(&Decryption::DecryptionCallback, this, std::placeholders::_1));
 
 
   /***********************/
   /* Ros Topic Publisher */
   /***********************/
-  DecryptedImagePublisher_ = this->create_publisher<sensor_msgs::msg::Image>("decrypted_image", default_qos);
+//  DecryptedImagePublisher_ = this->create_publisher<sensor_msgs::msg::Image>("decrypted_image", default_qos);
 
 
   fps_file_.open("/home/avees/ros2_ws/file/fps_data.csv");
@@ -51,6 +52,15 @@ Decryption::Decryption(Ui::MainWindow* ui)
   else {
     fps_file_ << "FPS" << std::endl;
   }
+
+  e2e_file_.open("/home/avees/ros2_ws/file/e2e_delay.csv");
+  if(!e2e_file_.is_open()) {
+    RCLCPP_ERROR(this->get_logger(), "Failed to open the e2e file!");
+  }
+  else {
+    e2e_file_ << "delay" << std::endl;
+  }
+
 }
 
 void Decryption::initialize_tee(Decryption::test_ctx *ctx)
@@ -183,35 +193,44 @@ void Decryption::DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg
         double fps = 1.0 / frame_duration.seconds();
         std::cout << "FPS: " << fps << std::endl;
 
-	ui_->fpsLabel->setText(QString("FPS: %1").arg(fps, 0, 'f', 2));
+	ui_->fpsLabel->setText(QString("%1").arg(fps, 0, 'f', 2));
     	
 	fps_file_ << fps << std::endl;
-	if (++fps_counter_ >= 2000) {
+	if (++fps_counter_ >= 5000) {
 	  fps_file_.close();
-	  std::cout << "2000 FPS values recorded. Exiting." << std::endl;
-	  rclcpp::shutdown();
-	  return;
+	  std::cout << "5000 FPS values recorded. Exiting." << std::endl;
+//	  rclcpp::shutdown();
+//	  return;
 	}
     }
 
     last_frame_time_ = current_time;
 
 
-    // 암호화된 데이터를 문자열로 변환
-    std::string encrypted_msg(reinterpret_cast<const char*>(msg->data.data()), msg->data.size());
-
-    // 복호화
-    std::string decrypted_msg = decrypt(encrypted_msg);
-
-    // 암호화된 메시지 게시
-    auto decrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*msg);
-    decrypted_image_msg->data.assign(decrypted_msg.begin(), decrypted_msg.end());
-
-    DecryptedImagePublisher_->publish(*decrypted_image_msg);
+//    // 암호화된 데이터를 문자열로 변환
+//    std::string encrypted_msg(reinterpret_cast<const char*>(msg->data.data()), msg->data.size());
+//
+//    // 복호화
+//    std::string decrypted_msg = decrypt(encrypted_msg);
+//
+//    // 암호화된 메시지 게시
+//    auto decrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*msg);
+//    decrypted_image_msg->data.assign(decrypted_msg.begin(), decrypted_msg.end());
+//
+////    DecryptedImagePublisher_->publish(*decrypted_image_msg);
+//
+//    cv_bridge::CvImagePtr cv_ptr;
+//    try{
+//      cv_ptr = cv_bridge::toCvCopy(decrypted_image_msg, "bgr8");
+//    }
+//    catch(cv_bridge::Exception& e){
+//      RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+//      return;
+//    }
 
     cv_bridge::CvImagePtr cv_ptr;
     try{
-      cv_ptr = cv_bridge::toCvCopy(decrypted_image_msg, "bgr8");
+      cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
     }
     catch(cv_bridge::Exception& e){
       RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
@@ -223,6 +242,27 @@ void Decryption::DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg
     QImage rgb_image = qimage.rgbSwapped();
 
     ui_->cameraLabel->setPixmap(QPixmap::fromImage(rgb_image));
+
+    if(!e2e_file_.is_open()){
+      std::cerr << "Failed to open the e2e file!" << std::endl;
+      return;
+    }
+    rclcpp::Clock system_clock(RCL_SYSTEM_TIME);
+    auto receive_time = system_clock.now();
+    rclcpp::Time publish_time(msg->header.stamp, RCL_SYSTEM_TIME);
+
+    rclcpp::Duration delay_duration = receive_time - publish_time;
+    auto delay_ms = delay_duration.nanoseconds() / 1e6;
+    RCLCPP_INFO(this->get_logger(), "E2E delay: %.3f ms", delay_ms);
+    if (delay_ms != 0){
+      e2e_file_ << delay_ms << std::endl;
+      if (++delay_counter_ >= 5000) {
+        e2e_file_.close();
+	std::cout << "5000 delay values recorded. Exiting." << std::endl;
+	rclcpp::shutdown();
+	return;
+      }
+    }
 
 }
 

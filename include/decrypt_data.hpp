@@ -94,7 +94,9 @@ public:
   
   rclcpp::Time last_frame_time_;
   std::ofstream fps_file_;
+  std::ofstream e2e_file_;
   int fps_counter_ = 0;
+  int delay_counter_ = 0;
   Ui::MainWindow* ui_;
 //  QLabel* cameraLabel_;
 
