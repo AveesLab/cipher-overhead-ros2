@@ -115,6 +115,7 @@ public:
 //  rclcpp::QoS qos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
 //  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr Enc_image_publisher;
   std::shared_ptr<image_transport::CameraPublisher> Enc_image_publisher;
+  rclcpp::TimerBase::SharedPtr timer_;
 
   int keylength;
 

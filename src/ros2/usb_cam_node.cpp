@@ -49,15 +49,19 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
   m_camera(new usb_cam::UsbCam()),
   m_image_msg(new sensor_msgs::msg::Image()),
   m_compressed_img_msg(nullptr),
-//  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
-//      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
-//      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
+  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
+      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
+      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
 //  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
 //      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
 //      rclcpp::QoS(100).best_effort().get_rmw_qos_profile()))),
-  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
-      image_transport::create_camera_publisher(this, "encrypted_image",
-      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
+//  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
+//      image_transport::create_camera_publisher(this, "encrypted_image",
+//      rclcpp::QoS(100).best_effort().get_rmw_qos_profile()))),
+//  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
+//      image_transport::create_camera_publisher(this, "encrypted_image",
+//      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
+//  timer_(nullptr),
   m_compressed_image_publisher(nullptr),
   m_compressed_cam_info_publisher(nullptr),
   m_parameters(),
@@ -95,24 +99,28 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
   this->declare_parameter("autofocus", false);
   this->declare_parameter("focus", -1);  // 0-255, -1 "leave alone"
 
-  this->get_parameter_or("key_size", keylength, 32);
-//  this->declare_parameter("key_size", 16);
 //  this->get_parameter_or("encryption/qos_tcp", tcp, true);
-  key = CryptoPP::SecByteBlock(0x00, keylength);
-  iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
-
-  initialize_tee(&ctx);
-
-  std::fill(key.begin(), key.end(), 'A');
-  std::fill(iv.begin(), iv.end(), 'A');
-
-  save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
+// this->get_parameter_or("key_size", keylength, 32);
+// key = CryptoPP::SecByteBlock(0x00, keylength);
+// iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
+//
+// initialize_tee(&ctx);
+//
+// std::fill(key.begin(), key.end(), 'A');
+// std::fill(iv.begin(), iv.end(), 'A');
+//
+// save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
   get_params();
   init();
   m_parameters_callback_handle = add_on_set_parameters_callback(
     std::bind(
       &UsbCamNode::parameters_callback, this,
       std::placeholders::_1));
+//  timer_ = this->create_wall_timer(
+//		  std::chrono::milliseconds(33),
+//		  std::bind(&UsbCamNode::take_and_send_image(), this)
+//		  );
+
 
 
 //  this->get_parameter_or("qos_tcp", tcp, true);
@@ -519,28 +527,30 @@ bool UsbCamNode::take_and_send_image()
   // grab the image, pass image msg buffer to fill
   m_camera->get_image(reinterpret_cast<char *>(&m_image_msg->data[0]));
 
-  auto stamp = m_camera->get_image_timestamp();
-  m_image_msg->header.stamp.sec = stamp.tv_sec;
-  m_image_msg->header.stamp.nanosec = stamp.tv_nsec;
+  m_image_msg->header.stamp = this->get_clock()->now();
+
+//  auto stamp = m_camera->get_image_timestamp();
+//  m_image_msg->header.stamp.sec = stamp.tv_sec;
+//  m_image_msg->header.stamp.nanosec = stamp.tv_nsec;
 
   *m_camera_info_msg = m_camera_info->getCameraInfo();
   m_camera_info_msg->header = m_image_msg->header;
 
 
-  // 메시지 직렬화 (Serialization)
-  std::string serialized_msg(reinterpret_cast<const char*>(m_image_msg->data.data()), m_image_msg->data.size());
-  std::cout << "message size: " << serialized_msg.size() << " bytes" << std::endl;
+//  // 메시지 직렬화 (Serialization)
+//  std::string serialized_msg(reinterpret_cast<const char*>(m_image_msg->data.data()), m_image_msg->data.size());
+//  std::cout << "message size: " << serialized_msg.size() << " bytes" << std::endl;
+//
+//  // 암호화
+//  std::string encrypted_msg = encrypt(serialized_msg);
+//
+//  // 암호화된 메시지 게시
+//  auto encrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*m_image_msg);
+//  encrypted_image_msg->data.assign(encrypted_msg.begin(), encrypted_msg.end());
+//
+//  Enc_image_publisher->publish(*encrypted_image_msg, *m_camera_info_msg);
 
-  // 암호화
-  std::string encrypted_msg = encrypt(serialized_msg);
-
-  // 암호화된 메시지 게시
-  auto encrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*m_image_msg);
-  encrypted_image_msg->data.assign(encrypted_msg.begin(), encrypted_msg.end());
-
-
-//  m_image_publisher->publish(*m_image_msg, *m_camera_info_msg);
-  Enc_image_publisher->publish(*encrypted_image_msg, *m_camera_info_msg);
+  m_image_publisher->publish(*m_image_msg, *m_camera_info_msg);
 
   return true;
 }
