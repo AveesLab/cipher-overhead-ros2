@@ -49,19 +49,18 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
   m_camera(new usb_cam::UsbCam()),
   m_image_msg(new sensor_msgs::msg::Image()),
   m_compressed_img_msg(nullptr),
-  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
-      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
-      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
+//  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
+//      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
+//      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
 //  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
 //      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
 //      rclcpp::QoS(100).best_effort().get_rmw_qos_profile()))),
 //  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
 //      image_transport::create_camera_publisher(this, "encrypted_image",
 //      rclcpp::QoS(100).best_effort().get_rmw_qos_profile()))),
-//  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
-//      image_transport::create_camera_publisher(this, "encrypted_image",
-//      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
-//  timer_(nullptr),
+  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
+      image_transport::create_camera_publisher(this, "encrypted_image",
+      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
   m_compressed_image_publisher(nullptr),
   m_compressed_cam_info_publisher(nullptr),
   m_parameters(),
@@ -100,16 +99,16 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
   this->declare_parameter("focus", -1);  // 0-255, -1 "leave alone"
 
 //  this->get_parameter_or("encryption/qos_tcp", tcp, true);
-// this->get_parameter_or("key_size", keylength, 32);
-// key = CryptoPP::SecByteBlock(0x00, keylength);
-// iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
+ this->get_parameter_or("key_size", keylength, 32);
+ key = CryptoPP::SecByteBlock(0x00, keylength);
+ iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
 //
-// initialize_tee(&ctx);
+   initialize_tee(&ctx);
 //
-// std::fill(key.begin(), key.end(), 'A');
-// std::fill(iv.begin(), iv.end(), 'A');
+ std::fill(key.begin(), key.end(), 'A');
+ std::fill(iv.begin(), iv.end(), 'A');
 //
-// save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
+   save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
   get_params();
   init();
   m_parameters_callback_handle = add_on_set_parameters_callback(
@@ -234,10 +233,16 @@ std::string UsbCamNode::encrypt(const std::string& plaintext)
     char saved_key[keylength];
     load_key(&ctx, id, saved_key, keylength);
     CryptoPP::SecByteBlock key_string(reinterpret_cast<const unsigned char*>(saved_key), strlen(saved_key));
-
+    std::cout << "saved_key: " << saved_key << std::endl;
+//
 //    //CBC mode
-    CryptoPP::AES::Encryption aesEncryption(key_string, keylength);
-    //CryptoPP::AES::Encryption aesEncryption(key, keylength);
+//    CryptoPP::AES::Encryption aesEncryption(key_string, keylength);
+//
+    CryptoPP::AES::Encryption aesEncryption(key, keylength);
+    std::cout << "key: ";
+//    std::cout.write(reinterpret_cast<const char*>(key_string.data()), key_string.size());
+    std::cout.write(reinterpret_cast<const char*>(key.data()), key.size());
+
     CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption(aesEncryption, iv);
     CryptoPP::StreamTransformationFilter stfEncryptor(cbcEncryption, new CryptoPP::StringSink(ciphertext));
     stfEncryptor.Put(reinterpret_cast<const unsigned char*>(plaintext.c_str()), plaintext.length());
@@ -255,7 +260,7 @@ std::string UsbCamNode::encrypt(const std::string& plaintext)
 
 
     if(ciphertext != ""){
-      RCLCPP_INFO(this->get_logger(), "Keysize = %i", keylength);
+//      RCLCPP_INFO(this->get_logger(), "Keysize = %i", keylength);
     }
     return ciphertext;
 
@@ -537,20 +542,20 @@ bool UsbCamNode::take_and_send_image()
   m_camera_info_msg->header = m_image_msg->header;
 
 
-//  // 메시지 직렬화 (Serialization)
-//  std::string serialized_msg(reinterpret_cast<const char*>(m_image_msg->data.data()), m_image_msg->data.size());
-//  std::cout << "message size: " << serialized_msg.size() << " bytes" << std::endl;
-//
-//  // 암호화
-//  std::string encrypted_msg = encrypt(serialized_msg);
-//
-//  // 암호화된 메시지 게시
-//  auto encrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*m_image_msg);
-//  encrypted_image_msg->data.assign(encrypted_msg.begin(), encrypted_msg.end());
-//
-//  Enc_image_publisher->publish(*encrypted_image_msg, *m_camera_info_msg);
+  // 메시지 직렬화 (Serialization)
+  std::string serialized_msg(reinterpret_cast<const char*>(m_image_msg->data.data()), m_image_msg->data.size());
+  std::cout << "message size: " << serialized_msg.size() << " bytes" << std::endl;
 
-  m_image_publisher->publish(*m_image_msg, *m_camera_info_msg);
+  // 암호화
+  std::string encrypted_msg = encrypt(serialized_msg);
+
+  // 암호화된 메시지 게시
+  auto encrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*m_image_msg);
+  encrypted_image_msg->data.assign(encrypted_msg.begin(), encrypted_msg.end());
+
+  Enc_image_publisher->publish(*encrypted_image_msg, *m_camera_info_msg);
+
+//  m_image_publisher->publish(*m_image_msg, *m_camera_info_msg);
 
   return true;
 }
