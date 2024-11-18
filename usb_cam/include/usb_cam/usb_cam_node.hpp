@@ -41,6 +41,7 @@
 #include "sensor_msgs/msg/image.hpp"
 #include "sensor_msgs/msg/compressed_image.hpp"
 #include "std_srvs/srv/set_bool.hpp"
+#include <std_msgs/msg/string.hpp>
 
 #include "usb_cam/usb_cam.hpp"
 
@@ -51,6 +52,7 @@
 #include <cryptopp/hex.h>
 
 #define _GUN_SOURCE
+//#include "ta_aes.h"
 
 extern "C" {
     #include <err.h>
@@ -100,6 +102,7 @@ public:
   std::shared_ptr<image_transport::CameraPublisher> m_image_publisher;
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr m_compressed_image_publisher;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr m_compressed_cam_info_publisher;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
 
   parameters_t m_parameters;
 
@@ -132,6 +135,7 @@ public:
   TEEC_Result save_key(UsbCamNode::test_ctx *ctx, char *id, char *data, size_t data_len);
   TEEC_Result load_key(UsbCamNode::test_ctx *ctx, char *id, char *data, size_t data_len);
   std::string encrypt(const std::string& plaintext);
+  std::string encrypt_image_data(const std::string &serialized_image, size_t key_len);
   void EncryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg);
   char id[7] = "key_id";
 

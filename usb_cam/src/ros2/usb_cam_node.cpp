@@ -39,6 +39,19 @@
         {0xf4e750bb, 0x1437, 0x4fbf, \
             {0x87, 0x85, 0x8d, 0x35, 0x80, 0xc3, 0x49, 0x93}}
 
+//#ifndef TA_HELLO_WORLD_H
+//#define TA_HELLO_WORLD_H
+//
+//#define TA_HELLO_WORLD_UUID \
+//        { 0x12345678, 0x9abc, 0xdef0, \
+//                 { 0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef } }
+//
+//#define TA_HELLO_WORLD_CMD_INC_VALUE            0
+//#define TA_HELLO_WORLD_CMD_DEC_VALUE            1
+//
+//#endif 
+
+
 const char BASE_TOPIC_NAME[] = "image_raw";
 
 namespace usb_cam
@@ -61,6 +74,7 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
   Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
       image_transport::create_camera_publisher(this, "encrypted_image",
       rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
+      
   m_compressed_image_publisher(nullptr),
   m_compressed_cam_info_publisher(nullptr),
   m_parameters(),
@@ -102,14 +116,28 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
  this->get_parameter_or("key_size", keylength, 32);
  key = CryptoPP::SecByteBlock(0x00, keylength);
  iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
-//
-   initialize_tee(&ctx);
-//
+////
+//   initialize_tee(&ctx);
+////
  std::fill(key.begin(), key.end(), 'A');
  std::fill(iv.begin(), iv.end(), 'A');
-//
-   save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
+////
+//   save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
+//        std::cout << "Starting encryption...1" << std::endl;
+
   get_params();
+//  try {
+//    init();
+//} catch (const std::exception& e) {
+//    RCLCPP_ERROR(this->get_logger(), "Exception caught in init(): %s", e.what());
+//    rclcpp::shutdown();
+//} catch (const char* e) {
+//    RCLCPP_ERROR(this->get_logger(), "String literal exception in init(): %s", e);
+//    rclcpp::shutdown();
+//} catch (...) {
+//    RCLCPP_ERROR(this->get_logger(), "Unknown exception caught in init()");
+//    rclcpp::shutdown();
+//}
   init();
   m_parameters_callback_handle = add_on_set_parameters_callback(
     std::bind(
@@ -119,14 +147,19 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
 //		  std::chrono::milliseconds(33),
 //		  std::bind(&UsbCamNode::take_and_send_image(), this)
 //		  );
+//        std::cout << "Starting encryption...2" << std::endl;
 
-
+//  rclcpp::QoS qos(10);
+//  qos.reliable();
+//  publisher_ = this->create_publisher<std_msgs::msg::String>("encrypted_image", qos);
 
 //  this->get_parameter_or("qos_tcp", tcp, true);
 //  if(tcp){
 //    qos.reliable(); 
 //  }
 //  else qos.best_effort();
+//        std::cout << "Starting encryption...3" << std::endl;
+
 }
 
 UsbCamNode::~UsbCamNode()
@@ -156,6 +189,45 @@ void UsbCamNode::initialize_tee(UsbCamNode::test_ctx *ctx)
     res = TEEC_OpenSession(&ctx->ctx, &ctx->sess, &uuid, TEEC_LOGIN_PUBLIC, NULL, NULL, &origin);
     if (res != TEEC_SUCCESS)
             errx(1, "TEEC_Opensession failed with code 0x%x origin 0x%x", res, origin);
+}
+
+std::string UsbCamNode::encrypt_image_data(const std::string &serialized_image, size_t key_len) {
+//    TEEC_Context ctx;
+//    TEEC_Session sess;
+//    TEEC_Operation op;
+//    TEEC_Result res;
+//    uint32_t error_origin;
+//
+//    TEEC_InitializeContext(NULL, &ctx);
+//    TEEC_UUID uuid = TA_HELLO_WORLD_UUID;
+//    res = TEEC_OpenSession(&ctx, &sess, &uuid, TEEC_LOGIN_PUBLIC, NULL, NULL, &res);
+//    if (res != TEEC_SUCCESS) {
+//        TEEC_FinalizeContext(&ctx);
+//        std::cerr << "Failed to open session with TA, error: " << res << ", origin: " << error_origin << std::endl;
+//        throw std::runtime_error("Failed to open session with TA");
+//    }
+//
+//    std::string ciphertext(serialized_image.size() + 16, '\0');
+//    op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT, TEEC_MEMREF_TEMP_OUTPUT, TEEC_VALUE_INPUT, TEEC_NONE);
+//    op.params[0].tmpref.buffer = const_cast<char *>(serialized_image.data());
+//    op.params[0].tmpref.size = serialized_image.size();
+//    op.params[1].tmpref.buffer = &ciphertext[0];
+//    op.params[1].tmpref.size = ciphertext.size();
+//    op.params[2].value.a = key_len;  // 키 길이를 TA에 전달
+//
+//    res = TEEC_InvokeCommand(&sess, TA_HELLO_WORLD_CMD_INC_VALUE, &op, &res);
+//    if (res != TEEC_SUCCESS) {
+//        TEEC_CloseSession(&sess);
+//        TEEC_FinalizeContext(&ctx);
+//        std::cerr << "Encryption command failed in TA, error: " << res << ", origin: " << error_origin << std::endl;
+//        throw std::runtime_error("Encryption command failed in TA");
+//    }
+//    ciphertext.resize(op.params[1].tmpref.size);
+//
+//    TEEC_CloseSession(&sess);
+//    TEEC_FinalizeContext(&ctx);
+//
+//    return ciphertext;
 }
 
 TEEC_Result UsbCamNode::save_key(UsbCamNode::test_ctx *ctx, char *id, char *data, size_t data_len)
@@ -230,37 +302,37 @@ std::string UsbCamNode::encrypt(const std::string& plaintext)
 {
     std::string ciphertext;
 
-    char saved_key[keylength];
-    load_key(&ctx, id, saved_key, keylength);
-    CryptoPP::SecByteBlock key_string(reinterpret_cast<const unsigned char*>(saved_key), strlen(saved_key));
-    std::cout << "saved_key: " << saved_key << std::endl;
-//
-//    //CBC mode
+//    char saved_key[keylength];
+//    load_key(&ctx, id, saved_key, keylength);
+//    CryptoPP::SecByteBlock key_string(reinterpret_cast<const unsigned char*>(saved_key), strlen(saved_key));
+//    std::cout << "saved_key: " << saved_key << std::endl;
+
+    //CBC mode
 //    CryptoPP::AES::Encryption aesEncryption(key_string, keylength);
-//
+
     CryptoPP::AES::Encryption aesEncryption(key, keylength);
-    std::cout << "key: ";
+//    std::cout << "key: ";
 //    std::cout.write(reinterpret_cast<const char*>(key_string.data()), key_string.size());
-    std::cout.write(reinterpret_cast<const char*>(key.data()), key.size());
+//    std::cout.write(reinterpret_cast<const char*>(key.data()), key.size());
 
     CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption(aesEncryption, iv);
     CryptoPP::StreamTransformationFilter stfEncryptor(cbcEncryption, new CryptoPP::StringSink(ciphertext));
     stfEncryptor.Put(reinterpret_cast<const unsigned char*>(plaintext.c_str()), plaintext.length());
     stfEncryptor.MessageEnd();
-
-//    CTR mode
-//    CryptoPP::CTR_Mode<CryptoPP::AES>::Encryption ctrEncryption;
-//    ctrEncryption.SetKeyWithIV(key_string, key_string.size(), iv);
-//    
-//    CryptoPP::StringSource ss(plaintext, true,
-//    	new CryptoPP::StreamTransformationFilter(ctrEncryption,
-//    		new CryptoPP::StringSink(ciphertext)
-//    	)
-//    );
-
-
+//
+////    CTR mode
+////    CryptoPP::CTR_Mode<CryptoPP::AES>::Encryption ctrEncryption;
+////    ctrEncryption.SetKeyWithIV(key_string, key_string.size(), iv);
+////    
+////    CryptoPP::StringSource ss(plaintext, true,
+////    	new CryptoPP::StreamTransformationFilter(ctrEncryption,
+////    		new CryptoPP::StringSink(ciphertext)
+////    	)
+////    );
+//
+//
     if(ciphertext != ""){
-//      RCLCPP_INFO(this->get_logger(), "Keysize = %i", keylength);
+      RCLCPP_INFO(this->get_logger(), "Keysize = %i", keylength);
     }
     return ciphertext;
 
@@ -547,9 +619,33 @@ bool UsbCamNode::take_and_send_image()
   std::cout << "message size: " << serialized_msg.size() << " bytes" << std::endl;
 
   // 암호화
+//   std::cout << "Starting encryption..." << std::endl;
+//  std::string encrypted_image = encrypt_image_data(serialized_msg, 16);
+//  std::cout << "Encryption completed." << std::endl;
   std::string encrypted_msg = encrypt(serialized_msg);
+    // 암호화 및 예외 처리
+//    std::string encrypted_image;
+//    try {
+//        std::cout << "Starting encryption..." << std::endl;
+//        encrypted_image = encrypt_image_data(serialized_msg, 16);
+//        std::cout << "Encryption completed." << std::endl;
+//    } catch (const std::exception &e) {
+//        std::cerr << "Exception during encryption: " << e.what() << std::endl;
+//        return false;
+//    } catch (const char* e) {
+//        std::cerr << "String literal exception: " << e << std::endl;
+//        return false;
+//    } catch (...) {
+//        std::cerr << "Unknown exception occurred during encryption" << std::endl;
+//        return false;
+//    }  
 
   // 암호화된 메시지 게시
+//  std_msgs::msg::String msg;
+////  msg.data = serialized_msg;
+//  msg.data = encrypted_image;
+//  publisher_->publish(msg);
+
   auto encrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*m_image_msg);
   encrypted_image_msg->data.assign(encrypted_msg.begin(), encrypted_msg.end());
 
