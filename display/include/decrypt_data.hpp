@@ -36,6 +36,7 @@
 //ROS2
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/float32.hpp"
+#include "std_msgs/msg/string.hpp"
 
 #include <cryptopp/aes.h>
 #include <cryptopp/filters.h>
@@ -68,7 +69,6 @@ class Decryption : public QObject, public rclcpp::Node
 public:
   Decryption(Ui::MainWindow* ui);
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr ImageSubscriber_;
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr DecryptedImagePublisher_;
 
   CryptoPP::SecByteBlock key;
   CryptoPP::SecByteBlock iv;
@@ -89,6 +89,7 @@ public:
   TEEC_Result save_key(Decryption::test_ctx *ctx, char *id, char *data, size_t data_len);
   TEEC_Result load_key(Decryption::test_ctx *ctx, char *id, char *data, size_t data_len);
   std::string decrypt(const std::string& plaintext);
+//  void DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg);
   void DecryptionCallback(const sensor_msgs::msg::Image::SharedPtr msg);
   char id[7] = "key_id";
   
