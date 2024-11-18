@@ -34,11 +34,6 @@
 #include "usb_cam/usb_cam_node.hpp"
 #include "usb_cam/utils.hpp"
 
-//temp uuid
-#define TA_SECURE_STORAGE_UUID \
-        {0xf4e750bb, 0x1437, 0x4fbf, \
-            {0x87, 0x85, 0x8d, 0x35, 0x80, 0xc3, 0x49, 0x93}}
-
 const char BASE_TOPIC_NAME[] = "image_raw";
 
 namespace usb_cam
@@ -52,15 +47,15 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
 //  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
 //      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
 //      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
-//  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
-//      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
-//      rclcpp::QoS(100).best_effort().get_rmw_qos_profile()))),
+  m_image_publisher(std::make_shared<image_transport::CameraPublisher>(
+      image_transport::create_camera_publisher(this, BASE_TOPIC_NAME,
+      rclcpp::QoS(100).best_effort().get_rmw_qos_profile()))),
 //  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
 //      image_transport::create_camera_publisher(this, "encrypted_image",
 //      rclcpp::QoS(100).best_effort().get_rmw_qos_profile()))),
-  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
-      image_transport::create_camera_publisher(this, "encrypted_image",
-      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
+//  Enc_image_publisher(std::make_shared<image_transport::CameraPublisher>(
+//      image_transport::create_camera_publisher(this, "encrypted_image",
+//      rclcpp::QoS(100).reliable().get_rmw_qos_profile()))),
   m_compressed_image_publisher(nullptr),
   m_compressed_cam_info_publisher(nullptr),
   m_parameters(),
@@ -102,31 +97,15 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
  this->get_parameter_or("key_size", keylength, 32);
  key = CryptoPP::SecByteBlock(0x00, keylength);
  iv = CryptoPP::SecByteBlock(0x00, CryptoPP::AES::BLOCKSIZE);
-//
-   initialize_tee(&ctx);
-//
  std::fill(key.begin(), key.end(), 'A');
  std::fill(iv.begin(), iv.end(), 'A');
-//
-   save_key(&ctx, id, reinterpret_cast<char*>(key.data()), key.size());
+
   get_params();
   init();
   m_parameters_callback_handle = add_on_set_parameters_callback(
     std::bind(
       &UsbCamNode::parameters_callback, this,
       std::placeholders::_1));
-//  timer_ = this->create_wall_timer(
-//		  std::chrono::milliseconds(33),
-//		  std::bind(&UsbCamNode::take_and_send_image(), this)
-//		  );
-
-
-
-//  this->get_parameter_or("qos_tcp", tcp, true);
-//  if(tcp){
-//    qos.reliable(); 
-//  }
-//  else qos.best_effort();
 }
 
 UsbCamNode::~UsbCamNode()
@@ -143,125 +122,19 @@ UsbCamNode::~UsbCamNode()
   delete (m_camera);
 }
 
-void UsbCamNode::initialize_tee(UsbCamNode::test_ctx *ctx)
-{
-    TEEC_UUID uuid = TA_SECURE_STORAGE_UUID;
-    uint32_t origin;
-    TEEC_Result res;
-
-    res = TEEC_InitializeContext(NULL, &ctx->ctx);
-    if (res != TEEC_SUCCESS)
-            errx(1, "TEEC_InitializeContext failed with code 0x%x", res);
-
-    res = TEEC_OpenSession(&ctx->ctx, &ctx->sess, &uuid, TEEC_LOGIN_PUBLIC, NULL, NULL, &origin);
-    if (res != TEEC_SUCCESS)
-            errx(1, "TEEC_Opensession failed with code 0x%x origin 0x%x", res, origin);
-}
-
-TEEC_Result UsbCamNode::save_key(UsbCamNode::test_ctx *ctx, char *id, char *data, size_t data_len)
-{
-    TEEC_Operation op;
-    uint32_t origin;
-    TEEC_Result res;
-    size_t id_len = strlen(id);
-
-    memset(&op, 0, sizeof(op));
-    op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
-                                     TEEC_MEMREF_TEMP_INPUT,
-                                     TEEC_NONE, TEEC_NONE);
-
-    op.params[0].tmpref.buffer = id;
-    op.params[0].tmpref.size = id_len;
-
-    op.params[1].tmpref.buffer = data;
-    op.params[1].tmpref.size = data_len;
-
-    res = TEEC_InvokeCommand(&ctx->sess, /*TA_SECURE_STORAGE_CMD_WRITE*/1, &op, &origin);
-    memset(&op, 0, sizeof(op));
-
-    if (res != TEEC_SUCCESS)
-        errx(1, "Command WRITE failed: 0x%x / %u\n", res, origin);
-        //printf("Command WRITE failed: 0x%x / %u\n", res, origin);
-
-    switch (res) {
-    case TEEC_SUCCESS:
-        break;
-    default:
-        //printf("Command WRITE failed 0x%x / %u\n", res, origin);
-        errx(1, "Command WRITE failed: 0x%x / %u\n", res, origin);
-    }
-    return res;
-}
-
-TEEC_Result UsbCamNode::load_key(UsbCamNode::test_ctx *ctx, char *id, char *data, size_t data_len)
-{
-    TEEC_Operation op;
-    uint32_t origin;
-    TEEC_Result res;
-    size_t id_len = strlen(id);
-
-    memset(&op, 0, sizeof(op));
-    op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT,
-                                     TEEC_MEMREF_TEMP_OUTPUT,
-                                     TEEC_NONE, TEEC_NONE);
-
-    op.params[0].tmpref.buffer = id;
-    op.params[0].tmpref.size = id_len;
-
-    op.params[1].tmpref.buffer = data;
-    op.params[1].tmpref.size = data_len;
-
-    res = TEEC_InvokeCommand(&ctx->sess, /*TA_SECURE_STORAGE_CMD_READ*/ 0, &op, &origin);
-
-    memset(&op, 0, sizeof(op));
-    switch (res) {
-    case TEEC_SUCCESS:
-    case TEEC_ERROR_SHORT_BUFFER:
-    case TEEC_ERROR_ITEM_NOT_FOUND:
-        break;
-    default:
-        errx(1, "Command READ failed: 0x%x / %u\n", res, origin);
-        //printf("Command READ failed: 0x%x / %u\n", res, origin);
-    }
-    return res;
-}
 
 std::string UsbCamNode::encrypt(const std::string& plaintext)
 {
     std::string ciphertext;
 
-    char saved_key[keylength];
-    load_key(&ctx, id, saved_key, keylength);
-    CryptoPP::SecByteBlock key_string(reinterpret_cast<const unsigned char*>(saved_key), strlen(saved_key));
-    std::cout << "saved_key: " << saved_key << std::endl;
-//
-//    //CBC mode
-//    CryptoPP::AES::Encryption aesEncryption(key_string, keylength);
-//
+    //CBC mode
     CryptoPP::AES::Encryption aesEncryption(key, keylength);
-    std::cout << "key: ";
-//    std::cout.write(reinterpret_cast<const char*>(key_string.data()), key_string.size());
-    std::cout.write(reinterpret_cast<const char*>(key.data()), key.size());
 
     CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption(aesEncryption, iv);
     CryptoPP::StreamTransformationFilter stfEncryptor(cbcEncryption, new CryptoPP::StringSink(ciphertext));
     stfEncryptor.Put(reinterpret_cast<const unsigned char*>(plaintext.c_str()), plaintext.length());
     stfEncryptor.MessageEnd();
 
-//    CTR mode
-//    CryptoPP::CTR_Mode<CryptoPP::AES>::Encryption ctrEncryption;
-//    ctrEncryption.SetKeyWithIV(key_string, key_string.size(), iv);
-//    
-//    CryptoPP::StringSource ss(plaintext, true,
-//    	new CryptoPP::StreamTransformationFilter(ctrEncryption,
-//    		new CryptoPP::StringSink(ciphertext)
-//    	)
-//    );
-
-
-    if(ciphertext != ""){
-//      RCLCPP_INFO(this->get_logger(), "Keysize = %i", keylength);
-    }
     return ciphertext;
 
 }
@@ -543,19 +416,19 @@ bool UsbCamNode::take_and_send_image()
 
 
   // 메시지 직렬화 (Serialization)
-  std::string serialized_msg(reinterpret_cast<const char*>(m_image_msg->data.data()), m_image_msg->data.size());
-  std::cout << "message size: " << serialized_msg.size() << " bytes" << std::endl;
+//  std::string serialized_msg(reinterpret_cast<const char*>(m_image_msg->data.data()), m_image_msg->data.size());
+//  std::cout << "message size: " << serialized_msg.size() << " bytes" << std::endl;
 
   // 암호화
-  std::string encrypted_msg = encrypt(serialized_msg);
+//  std::string encrypted_msg = encrypt(serialized_msg);
 
   // 암호화된 메시지 게시
-  auto encrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*m_image_msg);
-  encrypted_image_msg->data.assign(encrypted_msg.begin(), encrypted_msg.end());
+//  auto encrypted_image_msg = std::make_shared<sensor_msgs::msg::Image>(*m_image_msg);
+//  encrypted_image_msg->data.assign(encrypted_msg.begin(), encrypted_msg.end());
 
-  Enc_image_publisher->publish(*encrypted_image_msg, *m_camera_info_msg);
+//  Enc_image_publisher->publish(*encrypted_image_msg, *m_camera_info_msg);
 
-//  m_image_publisher->publish(*m_image_msg, *m_camera_info_msg);
+  m_image_publisher->publish(*m_image_msg, *m_camera_info_msg);
 
   return true;
 }
